@@ -7,7 +7,9 @@ template <bool Shown = true,
           uint32_t MaxOrds = 6,
           bool BinarySearch = false>
 class Lob {
+  // from most expensive to the cheapest
   bc::static_vector<Level<Side::Ask, Shown, MaxOrds>, MaxLevels> m_ask_levels;
+  // from cheapest to most expensive
   bc::static_vector<Level<Side::Bid, Shown, MaxOrds>, MaxLevels> m_bid_levels;
 
   template <Side S>

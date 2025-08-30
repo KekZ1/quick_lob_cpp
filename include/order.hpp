@@ -32,6 +32,30 @@ struct alignas(32) Order {
         time(0),
         cold(std::make_unique<OrderInfo>()) {}
 
+  // Copy constructor (deep copy)
+  Order(const Order& other)
+      : price(other.price),
+        size(other.size),
+        queue(other.queue),
+        id(other.id),
+        offset(other.offset),
+        time(other.time),
+        cold(other.cold ? std::make_unique<OrderInfo>(*other.cold) : nullptr) {}
+
+  // Copy assignment
+  Order& operator=(const Order& other) {
+    if (this != &other) {
+      price = other.price;
+      size = other.size;
+      queue = other.queue;
+      id = other.id;
+      offset = other.offset;
+      time = other.time;
+      cold = other.cold ? std::make_unique<OrderInfo>(*other.cold) : nullptr;
+    }
+    return *this;
+  }
+
   template <OrderType U = T,
             typename = std::enable_if_t<U != OrderType::Market>>
   Order(Price _price, Size _size, Id _id, Time _time)
@@ -63,7 +87,6 @@ struct alignas(32) Order {
         offset(Offset::Open),
         time(_time),
         cold(std::make_unique<OrderInfo>(OrderInfo{.original_size = _size})) {}
-  
 
   template <OrderType U = T,
             typename = std::enable_if_t<U != OrderType::Market>>

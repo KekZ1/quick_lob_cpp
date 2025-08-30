@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <boost/circular_buffer.hpp>
 #include <compare>
 #include <format>
@@ -23,8 +24,13 @@ L1 Cache 32 * 128 * 8 bytes: 8,192 ints
 template <Side S, uint32_t MaxOrds = 6>
 struct TransactionResult {
   bc::static_vector<Order<S, OrderType::Limit>, MaxOrds> lifted_orders;
-  Size lifted_volume = 0;    // our orders
-  Size executed_volume = 0;  // in total
+  Size market_volume = 0;  // total volume in lob
+
+  Size self_volume() const {
+    return std::accumulate(
+        lifted_orders.begin(), lifted_orders.end(), 0,
+        [](auto roll, const auto& ord) { return roll + ord.size; });
+  }
 };
 
 /* 1 level is 40 + 32 * MaxOrds Bytes */
@@ -83,9 +89,10 @@ class Level {
     if (m_orders.size() == MaxOrds) [[unlikely]]
       return false;
 
-    m_orders.cold->original_queue = m_size;
-
     m_orders.emplace_back(std::forward<U>(order));
+    m_orders.back().cold->original_queue = m_size;
+    m_orders.back().queue = m_size;
+
     if constexpr (Shown)
       m_size += m_orders.back().size;
     return true;  // success
@@ -107,7 +114,7 @@ class Level {
     return std::nullopt;
   }
 
-  auto cancel_all() -> decltype(m_orders) {
+  auto cancel_all() {
     if constexpr (Shown) {
       m_size -= std::accumulate(
           m_orders.begin(), m_orders.end(), 0,
@@ -122,72 +129,77 @@ class Level {
     // processes the market transaction volume on the level
     // adjust for the shown orders
     TransactionResult<S, MaxOrds> out;
-    auto it = m_orders.begin();
-    while (out.lifted_volume < size && it != m_orders.end()) {
-      ;
+    if (size >= m_size) {  // lifted completely
+      out.market_volume = m_size;
+      out.lifted_orders = std::move(m_orders);
+
+      m_size = 0;
+      m_orders.clear();
+    } else {  // lifted partially
+      out.market_volume = size;
+      m_size -= size;
+
+      auto it = m_orders.begin();
+      if constexpr (Shown) {  // allows partial fills
+        while (it != m_orders.end() && it->queue + it->size <= size) {
+          out.lifted_orders.emplace_back(std::move(*it));
+          it = m_orders.erase(it);
+        }
+        if (it != m_orders.end() && it->queue < size) {
+          const auto lifted_sz = size - it->queue;
+          out.lifted_orders.push_back(*it);
+          out.lifted_orders.back().size = lifted_sz;
+          it->size -= lifted_sz;
+          it->queue = 0;
+          ++it;
+        }
+      } else {  // no partial fills
+        while (it != m_orders.end() && it->queue < size) {
+          out.lifted_orders.emplace_back(std::move(*it));
+          it = m_orders.erase(it);
+        }
+      }
+      for (; it != m_orders.end(); ++it) {
+        it->queue -= std::min(it->queue, size);
+      }
     }
+    return out;
   }
 
-  /*
-    auto walk_until_lifted(const Size size)
-        -> bc::static_vector<Order<Opp<S>>, MaxOrds> {
-      // walks the level until lifted `size` of our orders
-      auto rit = m_orders.rbegin();
-      decltype(m_orders) out;
-      Size lifted_sz = 0;
-      while (rit != m_orders.rend()) {
-        if (lifted_sz < size) {
-          // rit->
-        }
+  auto walk_until_lifted(const Size size) -> TransactionResult<S, MaxOrds> {
+    // walks the order book until the privided size of our orders is executed
+    TransactionResult<S, MaxOrds> out;
+    Size self_lifted = 0, traded_volume = 0;
+
+    auto it = m_orders.begin();
+    while (it != m_orders.end() && self_lifted < size) {
+      const Size lift = std::min(it->size, size - self_lifted);
+      self_lifted += lift;
+      traded_volume = it->queue + lift * Shown;
+
+      if (it->size == lift) [[likely]] {  // lift fully
+        out.lifted_orders.emplace_back(*it);
+        it = m_orders.erase(it);
+      } else {  // lift partially
+        out.lifted_orders.push_back(*it);
+        out.lifted_orders.back.size = lift;
+
+        it->size -= lift;
+        it->queue = 0;
+        ++it;
       }
-      while (rit != m_orders.rend()) {
-        if (rit->size <= resid) {
-          rit->queue = 0;
-          resid -= rit->size;
-          out.push_back(std::move(*rit));
-          rit =
-    std::make_reverse_iterator(m_orders.erase(std::next(rit).base())); } else {
-          if (resid != 0) {
-            out.push_back(*rit);
-            out.back().size = resid;
-            out.back().queue = 0;
-          }
-          rit->size -= resid;
-          rit->queue -= std::min<Size>(rit->queue, size);
-          resid = 0;
-          ++rit;
-        }
-      }
+    }
+    if (self_lifted < size) {  // not enough orders in the level
+      out.market_volume = m_size;
+      m_size = 0;
       return out;
     }
-  */
-
-  // bc::static_vector<Order<Opp<S>>, MaxOrds> walk(Size size) {
-  //   auto rit = m_orders.rbegin();
-  //   bc::static_vector<Order<Opp<S>>, MaxOrds> out;
-
-  //   Size resid = size;
-  //   m_size -= std::min<Size>(m_size, resid);
-  //   while (rit != m_orders.rend()) {
-  //     if (rit->size <= resid) {
-  //       rit->queue = 0;
-  //       resid -= rit->size;
-  //       out.push_back(std::move(*rit));
-  //       rit =
-  //       std::make_reverse_iterator(m_orders.erase(std::next(rit).base()));
-  //     } else {
-  //       if (resid != 0) {
-  //         out.push_back(*rit);
-  //         out.back().size = resid;
-  //         out.back().queue = 0;
-  //       }
-  //       rit->size -= resid;
-  //       rit->queue -= std::min<Size>(rit->queue, size);
-  //       resid = 0;
-  //       ++rit;
-  //     }
-  //   }
-  //   return out;
-  // }
-  // transaction with capped lift
+    // updating queues of the residual orders
+    for (; it != m_orders.end(); ++it) {
+      it->queue -= std::min(it->queue, traded_volume);
+    }
+    out.market_volume = traded_volume;
+    m_size -= traded_volume;
+    return out;
+  }
 };
