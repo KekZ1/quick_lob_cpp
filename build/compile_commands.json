@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Users/Iurii/Desktop/Studies/Quant/random_hft/lob/build",
+  "command": "C:\\msys64\\clang64\\bin\\clang++.exe -IC:/Users/Iurii/Desktop/Studies/Quant/random_hft/lob/include -IC:/msys64/ucrt64/include/boost -IC:/msys64/ucrt64/include/abseil-cpp-master -g -std=gnu++20 -g -O0 -Wall @CMakeFiles\\lob.dir\\src\\lob.cpp.obj.modmap -o CMakeFiles\\lob.dir\\src\\lob.cpp.obj -c C:\\Users\\Iurii\\Desktop\\Studies\\Quant\\random_hft\\lob\\src\\lob.cpp",
+  "file": "C:\\Users\\Iurii\\Desktop\\Studies\\Quant\\random_hft\\lob\\src\\lob.cpp",
+  "output": "CMakeFiles\\lob.dir\\src\\lob.cpp.obj"
+}
+]

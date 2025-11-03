@@ -1,0 +1,9 @@
+{
+  "revision": 0,
+  "rules": [
+    {
+      "primary-output": "CMakeFiles\\lob.dir\\src\\lob.cpp.obj"
+    }
+  ],
+  "version": 1
+}

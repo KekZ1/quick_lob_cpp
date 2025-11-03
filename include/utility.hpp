@@ -6,26 +6,32 @@
 #include <type_traits>
 namespace bc = boost::container;
 
-using Price = uint32_t;
-using Size = uint32_t;
-using Queue = uint32_t;
+using Price = int32_t;
+using Size = int32_t;
+using Queue = int32_t;
 using Time = uint32_t;
 using Id = uint32_t;
 
-#define SIGNED(x) static_cast<typename std::make_signed<decltype(x)>::type>(x)
+static_assert(std::is_integral<Price>::value, "Price must be an integral type");
 
-enum class OrderType : int { Limit = 0, FAK = 1, FOK = 2, Market = 3 };
-enum class Side : bool {
-  Ask = true /* also sell */,
-  Bid = false /* also buy */
-};
-template <Side S>
-constexpr Side Opp = (S == Side::Ask ? Side::Bid : Side::Ask);
+#define TO_SIGNED(x)                                                           \
+  static_cast<typename std::make_signed<decltype(x)>::type>(x)
 
-enum class Offset : int { Open, CloseTod, CloseYtd };
+enum OrderType : int { Limit = 0, FAK = 1, FOK = 2, Market = 3 };
+enum Side : int { Ask = 1, Sell = 1, Bid = 0, Buy = 0, Cancel = 2 };
+template <Side S> constexpr Side Opp = (S == Side::Ask ? Side::Bid : Side::Ask);
 
-template <bool Less, class T1, class T2>
-constexpr bool comp(T1 l, T2 r) {
-    if constexpr (Less) return l < r;
-    else return l > r;
+enum Offset : int { Open = 0, CloseTod = 1, CloseYtd = 2 };
+
+
+template <bool Less, class T1, class T2> constexpr bool comp(T1 l, T2 r) {
+  if constexpr (Less)
+    return l < r;
+  else
+    return l > r;
 }
+
+template <typename T> auto to_reverse(T it) {
+  return std::make_reverse_iterator(it);
+}
+template <typename T> auto to_regular(T rit) { return std::prev(rit.base()); }
