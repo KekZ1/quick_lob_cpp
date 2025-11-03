@@ -6,9 +6,9 @@
 #include <type_traits>
 namespace bc = boost::container;
 
-using Price = int32_t;
-using Size = int32_t;
-using Queue = int32_t;
+using Price = uint32_t;
+using Size = uint32_t;
+using Queue = uint32_t;
 using Time = uint32_t;
 using Id = uint32_t;
 
